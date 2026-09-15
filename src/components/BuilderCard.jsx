@@ -9,11 +9,16 @@ export default function BuilderCard({ builder, onToast }) {
     onToast('Starter scaffold downloaded.');
   };
 
+  const modeBadge = builder.mode === 'llm' ? 'Gemini · live'
+    : builder.mode === 'cached-llm' ? 'Gemini · cached'
+    : builder.mode === 'deterministic' ? 'fallback' : undefined;
+
   return (
     <OutputCard
       index={6}
       title="Builder Plan &amp; Starter Scaffold"
       agent="builder"
+      badge={modeBadge}
       copyable={builder.text}
       body={builder.text}
       onToast={onToast}

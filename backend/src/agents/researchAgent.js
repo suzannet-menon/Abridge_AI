@@ -1,5 +1,6 @@
 import { hash, pick } from '../utils/hash.js';
-import { runResearchLLM } from '../services/gemini.js';
+import { runLLMStage, MODE } from '../services/gemini.js';
+import { buildResearchPrompt } from '../prompts/prompts.js';
 
 const OPPORTUNITIES = [
   'Small, focused tools with a single clear job tend to win over sprawling platforms.',
@@ -85,23 +86,27 @@ function renderText(r) {
 }
 
 /**
- * Research stage. Uses the Gemini API when a key is configured (with a
- * deterministic in-process cache); otherwise falls back to seeded pool picks.
- * Always returns structured { opportunities, risks, directions, builderSignal, text }.
+ * Research stage. Uses the Gemini API when a key is configured (cached per
+ * input hash); otherwise falls back to seeded pool picks. Always returns
+ * structured { opportunities, risks, directions, builderSignal, text, mode }.
  */
 export async function runResearchAgent(input, gh) {
   const idea = input.idea || '';
   const ghResolved = gh || { profile: { followers: 0 }, languages: [] };
 
-  const llm = await runResearchLLM(input, ghResolved);
-  if (llm) {
-    return normalize(idea, ghResolved, {
-      opportunities: llm.opportunities,
-      risks: llm.risks,
-      directions: llm.directions,
-      builderSignal: llm.builderSignal,
+  const seedKey = (idea || '') + '|' + (input.stack || '') + '|' + (input.type || '') +
+    '|' + (input.deadline || '') + '|' + (ghResolved?.profile?.login || '');
+  const llm = await runLLMStage('research:' + seedKey, buildResearchPrompt(input, ghResolved));
+
+  if (llm.ok) {
+    const data = normalize(idea, ghResolved, {
+      opportunities: llm.data.opportunities,
+      risks: llm.data.risks,
+      directions: llm.data.directions,
+      builderSignal: llm.data.builderSignal,
     });
+    return { ...data, mode: llm.mode };
   }
 
-  return normalize(idea, ghResolved, deterministic(idea, ghResolved));
+  return { ...normalize(idea, ghResolved, deterministic(idea, ghResolved)), mode: MODE.DETERMINISTIC };
 }

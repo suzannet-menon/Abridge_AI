@@ -11,11 +11,17 @@ export default function BriefCard({ brief, briefText, onToast }) {
     ? resolved.text
     : resolved;
 
+  const modeBadge = (typeof resolved === 'object' && resolved !== null && resolved.mode === 'llm') ? 'Gemini · live'
+    : (typeof resolved === 'object' && resolved !== null && resolved.mode === 'cached-llm') ? 'Gemini · cached'
+    : (typeof resolved === 'object' && resolved !== null && resolved.mode === 'deterministic') ? 'fallback'
+    : undefined;
+
   return (
     <OutputCard
       index={7}
       title="Implementation Plan"
       agent="brief"
+      badge={modeBadge}
       copyable={text}
       onToast={onToast}
     >

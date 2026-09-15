@@ -14,6 +14,9 @@ export function renderText(brief) {
     `Project: ${brief.header?.project || '—'}`,
     `Owner:   ${brief.header?.owner || 'the builder'}`,
     '',
+    ...(brief.story
+      ? ['── Story ──────────────────────────────────────────', ...brief.story.split('\n').map(s => `  ${s}`), '']
+      : []),
     '── Context ──────────────────────────────────────',
     ...(brief.context || []).map(c => `  ${(c.label || '').padEnd(17)}: ${c.body}`),
     '',

@@ -54,7 +54,7 @@ Complete Project Brief (exportable .md)
 - **Tech stack recommendation** — matched to your comfort level and project type
 - **Starter scaffold** — downloadable as a `.zip` with `PLAN.md` included
 - **Markdown export** — full project brief downloadable as `.md`
-- **Optional Gemini research** — the research stage calls Gemini for idea-specific analysis when `GEMINI_API_KEY` is set, and falls back to the deterministic agent otherwise
+- **Optional Gemini upgrades** — research, architecture, builder, and brief stages call Gemini for idea-specific content when `GEMINI_API_KEY` is set, and fall back to the deterministic agents otherwise
 - **Project history** — saved to localStorage, restorable, deletable
 - **Draft autosave** — form persists across reloads
 - **Light & dark themes** — respects system preference, stored across sessions
@@ -155,17 +155,20 @@ npm run start
 
 ## Optional: Gemini-powered research
 
-The **Research & Opportunities** stage can call Google's Gemini API for
-idea-specific, in-depth research instead of deterministic pool picks:
+The **Research**, **Architecture**, **Builder**, and **Brief** stages call
+Google's Gemini API for idea-specific content when a key is configured — every
+other stage stays deterministic:
 
 1. Get a free key from https://aistudio.google.com
 2. `copy .env.example .env` and set `GEMINI_API_KEY=...`
 3. Restart the backend (`npm run server`)
 
+- Prompts live in `backend/src/prompts/prompts.js` — each defines the strict
+  JSON shape the stage expects, so output is concrete and idea-specific.
 - Results are cached per project-input hash, so repeated runs of the same idea
-  never re-bill and stay stable within a session.
+  never re-bill and stay stable within a session (a `cached-llm` badge is shown).
 - No key, network failure, or API error = automatic fallback to the bundled
-  deterministic research agent. The app always works.
+  deterministic agents (shown as `fallback` in the UI). The app always works.
 
 ---
 
@@ -201,7 +204,7 @@ Clearing browser data for the site resets everything.
 
 ## Limitations
 
-- **Deterministic default / optional LLM** — without a key, every stage computes deterministically from your inputs via hashed seeding (same inputs → same outputs). Setting `GEMINI_API_KEY` upgrades the research stage to Gemini; every other stage stays deterministic.
+- **Deterministic default / optional LLM** — without a key, every stage computes deterministically from your inputs via hashed seeding (same inputs → same outputs). Setting `GEMINI_API_KEY` upgrades the research, architecture, builder, and brief stages to Gemini; feasibility, stack, and the scaffold stay deterministic.
 - **GitHub analysis is high-level** — language tallies from public repos give a rough signal, not a precise skill assessment. Treat the builder profile as directional, not definitive.
 - **Scaffold is a starting point** — the generated starter scaffold is not production-ready software. It provides a foundation with the right file structure and entry points, but requires real implementation work.
 - **Feasibility score is a planning estimate** — the /100 score is a structured heuristic, not a scientifically precise measurement. Use it to guide scoping conversations.

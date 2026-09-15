@@ -1,4 +1,6 @@
 import { hash, pick } from '../utils/hash.js';
+import { runLLMStage, MODE } from '../services/gemini.js';
+import { buildArchitecturePrompt } from '../prompts/prompts.js';
 
 const MODULE_POOL = [
   'core / domain logic',
@@ -29,28 +31,72 @@ const PRINCIPLES = [
   'Prefer composition over inheritance; small functions, clear names.',
 ];
 
-export function runArchitectureAgent(input) {
-  const seed = hash((input.idea || '') + '|arch');
-  const modules = pick(seed, MODULE_POOL, 4);
-  const flow = pick(seed ^ 0x2545f491, FLOWS, 1)[0];
-  const principles = pick(seed ^ 0x14b2d4c7, PRINCIPLES, 3);
+const FALLBACK_SHAPE = 'input → parse → transform → output';
 
+function deterministicParts(input) {
+  const seed = hash((input.idea || '') + '|arch');
+  return {
+    shape: FALLBACK_SHAPE,
+    modules: pick(seed, MODULE_POOL, 4),
+    flow: pick(seed ^ 0x2545f491, FLOWS, 1)[0],
+    principles: pick(seed ^ 0x14b2d4c7, PRINCIPLES, 3),
+  };
+}
+
+function clampArr(arr, n) {
+  if (!Array.isArray(arr)) return null;
+  const items = arr.map(x => String(x).trim()).filter(Boolean).slice(0, n);
+  return items.length ? items : null;
+}
+
+function normalize(input, part, fallback) {
+  const modules = clampArr(part?.modules, 4) || fallback.modules;
+  const principles = clampArr(part?.principles, 3) || fallback.principles;
+  const flow = String(part?.flow || '').trim() || fallback.flow;
+  const shape = String(part?.shape || '').trim() || fallback.shape;
+
+  return { shape, modules, flow, principles };
+}
+
+function renderText(input, a) {
   const lines = [
-    `Shape: ${flow}`,
+    `Shape: ${a.shape}`,
     '',
     'Modules',
-    ...modules.map((m, i) => `  ${i + 1}. ${m}`),
+    ...a.modules.map((m, i) => `  ${i + 1}. ${m}`),
     '',
     'Data flow',
-    `  boundary → ${modules[0]} → ${modules[1]} → ${modules[2]}`,
+    `  ${a.flow}`,
     '',
     'Design principles',
-    ...principles.map(p => `  • ${p}`),
+    ...a.principles.map(p => `  • ${p}`),
     '',
     'Notes',
     '  Adapt this blueprint to your specific domain. The module names are',
     '  starting points — rename them to match your project language.',
   ];
+  return lines.join('\n');
+}
 
-  return { shape: flow, modules, flow, principles, text: lines.join('\n') };
+/**
+ * Architecture stage. Gemini-first with a deterministic fallback: when the
+ * key is set, the model derives idea-specific modules/flow/principles; without
+ * one the bundled pools are hash-picked. Always returns the same structured
+ * shape { shape, modules, flow, principles, text, mode }.
+ */
+export async function runArchitectureAgent(ctx) {
+  const input = ctx?.input || {};
+
+  const llm = await runLLMStage(
+    'architecture:' + (input.idea || '') + '|' + (input.type || ''),
+    buildArchitecturePrompt(input, ctx),
+  );
+
+  if (llm.ok) {
+    const parts = normalize(input, llm.data, deterministicParts(input));
+    return { ...parts, text: renderText(input, parts), mode: llm.mode };
+  }
+
+  const parts = deterministicParts(input);
+  return { ...parts, text: renderText(input, parts), mode: MODE.DETERMINISTIC };
 }

@@ -27,19 +27,27 @@ function resultsOf(ctx) {
   return ctx?.results || {};
 }
 
+function clampList(arr, fallback, n) {
+  if (!Array.isArray(arr)) return fallback;
+  const items = arr.map(s => String(s).trim()).filter(Boolean).slice(0, n);
+  return items.length ? items : fallback;
+}
+
 /**
  * The ONE canonical brief model. Every renderer (screen text, markdown export)
  * derives from this object, so the two can never drift.
  *
- * Stage results are consumed structurally — no text slicing.
+ * Stage results are consumed structurally — no text slicing. Optional `llm`
+ * (from the brief Gemini call) overrides the next-steps / MVP / story sections;
+ * otherwise the bundled defaults are used so the brief always renders.
  */
-export function buildBriefModel(ctx) {
+export function buildBriefModel(ctx, llm) {
   const input = ctx?.input || {};
   const r = resultsOf(ctx);
 
   const gh = r.github;                       // { profile, languages, repos, badge }
   const feas = r.feasibility;                // { score, verdict, verdictClass, estimate, axes }
-  const builder = r.builder;                 // { files, folder, text }
+  const builder = r.builder;                 // { files, folder, text, milestones }
   const arch = r.architecture;               // { shape, modules, flow, principles }
   const research = r.research;               // { opportunities, risks, directions, builderSignal }
   const stack = r.stack;                     // { label, app, ui, api, data, ... }
@@ -48,6 +56,14 @@ export function buildBriefModel(ctx) {
   const projectType = PROJECT_TYPES[input.type] || input.type || 'Not specified';
   const teamSize = TEAM_SIZES[input.team] || input.team || 'Solo';
   const profileName = gh?.profile ? `${gh.profile.name} (@${gh.profile.login})` : 'not provided';
+
+  const llmUsed = !!(llm && (llm.nextSteps?.length || llm.mvpGuidance?.length || llm.story));
+  const nextSteps = clampList(llm?.nextSteps, NEXT_STEPS, 4);
+  const mvpGuidance = clampList(llm?.mvpGuidance, MVP_GUIDANCE, 4);
+  const story = llm?.story ? String(llm.story).trim() : null;
+  const footer = llmUsed
+    ? ['This plan used Gemini to tailor the narrative sections to your idea.', 'It is a starting point — adapt it to your specific situation.']
+    : FOOTER;
 
   const context = [
     { label: 'GitHub profile',  body: profileName },
@@ -63,9 +79,10 @@ export function buildBriefModel(ctx) {
   return {
     header: { project: input.idea || '—', owner: input.name || 'the builder' },
     context,
-    nextSteps: NEXT_STEPS,
-    mvpGuidance: MVP_GUIDANCE,
-    footer: FOOTER,
+    nextSteps,
+    mvpGuidance,
+    footer,
+    story,
 
     // Illuminated fields for the overview section of the markdown export.
     stackLabel,

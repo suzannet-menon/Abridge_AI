@@ -22,6 +22,13 @@ import { downloadFile } from './utils/export.js';
 
 const STAGE_KEYS = ['github', 'research', 'feasibility', 'architecture', 'stack', 'builder', 'brief'];
 
+function modeBadge(mode) {
+  if (mode === 'llm') return 'Gemini · live';
+  if (mode === 'cached-llm') return 'Gemini · cached';
+  if (mode === 'deterministic') return 'fallback';
+  return undefined;
+}
+
 export default function App() {
   const [view, setView] = useState('landing');
   const [theme, setTheme] = useState(() => readTheme() || getSystemTheme());
@@ -279,10 +286,12 @@ export default function App() {
                       body={results.github.text} badge={results.github.badge}
                       copyable={results.github.text} onToast={showToast} />
                     <OutputCard index={2} title="Research & Opportunity Analysis" agent="research"
-                      body={results.research?.text ?? results.research} copyable={results.research?.text ?? results.research} onToast={showToast} />
+                      body={results.research?.text ?? results.research} copyable={results.research?.text ?? results.research}
+                      badge={modeBadge(results.research?.mode)} onToast={showToast} />
                     <FeasibilityCard feasibility={results.feasibility} onToast={showToast} />
                     <OutputCard index={4} title="Architecture Direction" agent="architecture"
-                      body={results.architecture?.text ?? results.architecture} copyable={results.architecture?.text ?? results.architecture} onToast={showToast} />
+                      body={results.architecture?.text ?? results.architecture} copyable={results.architecture?.text ?? results.architecture}
+                      badge={modeBadge(results.architecture?.mode)} onToast={showToast} />
                     <OutputCard index={5} title="Tech Stack Recommendation" agent="stack"
                       body={results.stack?.text ?? results.stack} copyable={results.stack?.text ?? results.stack} onToast={showToast} />
                     <BuilderCard builder={results.builder} onToast={showToast} />

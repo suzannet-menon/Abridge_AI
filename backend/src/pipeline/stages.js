@@ -53,7 +53,7 @@ export const STAGES = {
     label: 'Architecture Direction',
     nextHint: 'Tech stack recommendation matched to your comfort level.',
     async run(ctx) {
-      return runArchitectureAgent(ctx.input);
+      return runArchitectureAgent(ctx);
     },
   },
 
@@ -73,7 +73,7 @@ export const STAGES = {
     label: 'Builder Plan & Scaffold',
     nextHint: 'Project brief — your complete implementation plan ready to follow.',
     async run(ctx) {
-      return runBuilderAgent(ctx.input);
+      return runBuilderAgent(ctx);
     },
   },
 
