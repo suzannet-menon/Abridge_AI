@@ -24,7 +24,8 @@ const STAGE_KEYS = ['github', 'research', 'feasibility', 'architecture', 'stack'
 
 function modeBadge(mode) {
   if (mode === 'llm') return 'Gemini · live';
-  if (mode === 'cached-llm') return 'Gemini · cached';
+  if (mode === 'groq') return 'Groq · live';
+  if (mode === 'cached-llm') return 'LLM · cached';
   if (mode === 'deterministic') return 'fallback';
   return undefined;
 }

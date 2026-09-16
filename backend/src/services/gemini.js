@@ -1,26 +1,8 @@
-import { hash } from '../utils/hash.js';
-
 const API_KEY = process.env.GEMINI_API_KEY || '';
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 // Model names drift; a valid key is never sent unless an explicit model is
 // chosen, so the endpoint carries the key as the standard query parameter.
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(API_KEY)}`;
-
-// In-process cache keyed by a stage seed so identical inputs are never
-// re-billed and repeat runs stay deterministic for the same cache lifetime.
-const cache = new Map();
-
-/**
- * Modes explain where a stage's content came from, so the UI can label it:
- * - 'llm'           fresh Gemini generation for this input
- * - 'cached-llm'    Gemini result reused from this process's cache
- * - 'deterministic' no key / API error / unparseable output → bundled agent
- */
-export const MODE = { LLM: 'llm', CACHED: 'cached-llm', DETERMINISTIC: 'deterministic' };
-
-function fail(mode = MODE.DETERMINISTIC) {
-  return { ok: false, data: null, mode };
-}
 
 function parseJson(raw) {
   if (!raw) return null;
@@ -32,16 +14,13 @@ function parseJson(raw) {
 }
 
 /**
- * Generic Gemini call for any stage. Returns
- *   { ok: true,  data: <parsed JSON>, mode: 'llm' | 'cached-llm' }
- *   { ok: false, data: null,          mode: 'deterministic' }
- * Callers fall back to their bundled deterministic logic when ok is false.
+ * Gemini stage call for any stage. Returns
+ *   { ok: true, data: <parsed JSON> }
+ *   { ok: false, error: <reason> }
+ * The orchestrator (llm.js) owns cross-provider caching and fallback.
  */
-export async function runLLMStage(seedKey, prompt) {
-  if (!API_KEY) return fail();
-
-  const seed = hash(String(seedKey ?? ''));
-  if (cache.has(seed)) return { ok: true, data: cache.get(seed), mode: MODE.CACHED };
+export async function runGeminiStage(prompt) {
+  if (!API_KEY) return { ok: false, data: null, error: 'no GEMINI_API_KEY' };
 
   try {
     const res = await fetch(ENDPOINT, {
@@ -58,23 +37,17 @@ export async function runLLMStage(seedKey, prompt) {
     });
     if (!res.ok) {
       console.error(`[gemini] ${MODEL} API ${res.status}:`, await res.text().catch(() => ''));
-      return fail();
+      return { ok: false, data: null, error: `gemini HTTP ${res.status}` };
     }
     const data = await res.json();
     const raw = (data?.candidates?.[0]?.content?.parts || [])
       .map(p => p.text || '')
       .join('');
     const parsed = parseJson(raw);
-    if (!parsed) return fail();
-
-    cache.set(seed, parsed);
-    return { ok: true, data: parsed, mode: MODE.LLM };
+    if (!parsed) return { ok: false, data: null, error: 'gemini returned unparseable JSON' };
+    return { ok: true, data: parsed, error: null };
   } catch (err) {
     console.error('[gemini] request failed:', err);
-    return fail();
+    return { ok: false, data: null, error: 'gemini request failed' };
   }
-}
-
-export function clearLLMCache() {
-  cache.clear();
 }

@@ -1,0 +1,8 @@
+.env
+.env.*
+*.log
+node_modules
+backend/node_modules
+dist
+.vercel
+public/data

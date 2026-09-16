@@ -10,6 +10,10 @@ const FEAS_RISKS = [
   { risk: 'Solo support load grows faster than the feature set.', fix: 'Keep the surface area small; automate errors and self-help.' },
   { risk: 'The stack is unfamiliar at this comfort level.', fix: 'Use the scaffolded starter files and step-by-step notes for the first week.' },
   { risk: 'Deadline is tight relative to scope.', fix: 'Scope down to a strict MVP; defer everything non-essential to v2.' },
+  { risk: 'Real-world input messiness blows the parsing estimate.', fix: 'Hard-code a small fixture suite of messy real inputs before the core is done.' },
+  { risk: 'Packaging and distribution are forgotten until the end.', fix: 'Wire install, help, and error text into the foundation milestone.' },
+  { risk: 'Ambiguous outcomes make the milestone "done" impossible to judge.', fix: 'Write a numeric done-when condition for every milestone.' },
+  { risk: 'A mismatch between audience and the chosen workflow.', fix: 'Port one real workflow end-to-end before building any spare features.' },
 ];
 
 function padScore(n, max) {
@@ -28,6 +32,7 @@ export function runFeasibilityAgent(input) {
   const hasCustomStack = !!input.customStack;
 
   const deadline = parseDeadline(input.deadline);
+  const days = deadline.days;
 
   // Five scoring axes
   const clarity    = Math.min(30, Math.floor(words * 0.5) + (audience ? 3 : 0));
@@ -53,10 +58,23 @@ export function runFeasibilityAgent(input) {
     recommendation = 'Redefine the idea as a single, sharp use case. Remove unknowns before committing to build.';
   }
 
+  if (days != null && days <= 7) {
+    recommendation += ' This reads as a sprint, not a buildout — cut scope to one vertical slice that ships inside the window.';
+  }
+
   const estimate = score >= 75 ? 'Lean' : score >= 55 ? 'Medium' : 'Large';
   const weeks    = score >= 75 ? '1–2'  : score >= 55 ? '3–5'   : '6–10';
 
-  const seed = hash((input.idea || '') + '|' + (input.stack || '') + '|' + comfort + '|' + (input.deadline || '') + '|' + typeKey);
+  const tight = days != null && days <= 14;
+  const teamLabel = TEAM_SIZES[teamKey] || 'Solo';
+  const estimateLine = tight
+    ? `Effort estimate: fits your ${days}‑day deadline as a tight MVP (${teamLabel}) — full version realistically ~${weeks} weeks`
+    : `Effort estimate: ${estimate} — ~${weeks} weeks (${teamLabel})`;
+  const estimateField = tight
+    ? `fits your ${days}‑day deadline as a tight MVP (full version ~${weeks} weeks)`
+    : `${estimate} — ~${weeks} weeks`;
+
+  const seed = hash((input.idea || '') + '|' + (input.stack || '') + '|' + (input.customStack || '') + '|' + comfort + '|' + (input.deadline || '') + '|' + typeKey + '|' + (input.audience || '') + '|' + (input.team || ''));
   const risks = pick(seed, FEAS_RISKS, 3);
 
   const stackLabel = hasCustomStack
@@ -75,7 +93,7 @@ export function runFeasibilityAgent(input) {
     `  Time realism   ${padScore(time, 15)}  (${deadline.label})`,
     `  Builder fit    ${padScore(builderFit, 10)}  (${stackLabel})`,
     '',
-    `Effort estimate: ${estimate} — ~${weeks} weeks (${TEAM_SIZES[teamKey] || 'Solo'})`,
+    estimateLine,
     '',
     'Recommendation',
     `  ${recommendation}`,
@@ -90,7 +108,7 @@ export function runFeasibilityAgent(input) {
     score,
     verdict,
     verdictClass,
-    estimate: `${estimate} — ~${weeks} weeks`,
+    estimate: estimateField,
     axes: [
       { label: 'Idea clarity',  value: clarity,    max: 30 },
       { label: 'Stack fit',     value: stackFit,   max: 25 },

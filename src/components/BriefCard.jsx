@@ -12,7 +12,8 @@ export default function BriefCard({ brief, briefText, onToast }) {
     : resolved;
 
   const modeBadge = (typeof resolved === 'object' && resolved !== null && resolved.mode === 'llm') ? 'Gemini · live'
-    : (typeof resolved === 'object' && resolved !== null && resolved.mode === 'cached-llm') ? 'Gemini · cached'
+    : (typeof resolved === 'object' && resolved !== null && resolved.mode === 'groq') ? 'Groq · live'
+    : (typeof resolved === 'object' && resolved !== null && resolved.mode === 'cached-llm') ? 'LLM · cached'
     : (typeof resolved === 'object' && resolved !== null && resolved.mode === 'deterministic') ? 'fallback'
     : undefined;
 

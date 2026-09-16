@@ -1,4 +1,13 @@
 import { STACKS } from '../domain/stacks.js';
+import { parseCustomStack, CATEGORY_LABELS, starterLanguageFor } from '../domain/techs.js';
+
+const STARTER_LABELS = { typescript: 'TypeScript / JavaScript', python: 'Python', go: 'Go', rust: 'Rust' };
+const STARTER_TOKENS = {
+  typescript: ['node', 'nodejs', 'bun', 'deno', 'javascript', 'typescript'],
+  python: ['python', 'fastapi', 'flask', 'django'],
+  go: ['go', 'golang', 'gin', 'echo'],
+  rust: ['rust', 'axum', 'actix'],
+};
 
 export function runTechStackAgent(input) {
   const hasCustomStack = !!input.customStack;
@@ -10,10 +19,39 @@ export function runTechStackAgent(input) {
     :                              'prefer scaffolding + step-by-step notes, one feature at a time';
 
   if (hasCustomStack) {
+    const { components, unknown } = parseCustomStack(input.customStack);
+
+    const byCategory = new Map();
+    components.forEach(c => {
+      if (!byCategory.has(c.category)) byCategory.set(c.category, []);
+      byCategory.get(c.category).push(c.label);
+    });
+
+    const compLines = [...byCategory.entries()].map(([cat, labels]) => {
+      const catLabel = CATEGORY_LABELS[cat] || cat;
+      return `  ${catLabel.padEnd(16)} ${labels.join(', ')}`;
+    });
+
+    const unknownLines = unknown.length
+      ? ['', '  Not yet recognized (will be noted in the scaffold):', ...unknown.map(u => `    • ${u}`)]
+      : [];
+
+    const base = starterLanguageFor(input);
+    const baseLabel = STARTER_LABELS[base] || base;
+    const runtimeTokens = components.filter(c => c.category === 'runtime').map(c => c.token);
+    const matchedToken = runtimeTokens.length
+      ? (STARTER_TOKENS[base] || []).some(t => runtimeTokens.includes(t))
+      : base !== 'typescript';
+    const starterNote = matchedToken
+      ? `The starter scaffold matches your stack (${baseLabel} base).`
+      : `No bundled starter for ${runtimeTokens.join(' + ') || 'your stack'} — the scaffold uses the ${baseLabel} default; adapt the files to match.`;
+
     const lines = [
       `Stack: ${input.customStack} (custom)`,
       '',
-      'Custom stack detected — recommendations are based on your specified combination.',
+      'Custom stack detected — rendered as components:',
+      ...compLines,
+      ...unknownLines,
       '',
       'General guidance for custom stacks:',
       '  • Verify all components have compatible versions before starting.',
@@ -23,10 +61,16 @@ export function runTechStackAgent(input) {
       '',
       `Pace (${comfort}): ${comfortNote}`,
       '',
-      'Note: The starter scaffold uses TypeScript defaults for file structure.',
-      '      Adapt the scaffold files to match your custom stack.',
+      `Note: ${starterNote}`,
     ];
-    return { label: input.customStack, custom: true, pace: comfortNote, text: lines.join('\n') };
+    return {
+      label: input.customStack,
+      custom: true,
+      components: components.map(c => ({ label: c.label, category: c.category })),
+      starterNote,
+      pace: comfortNote,
+      text: lines.join('\n'),
+    };
   }
 
   const key = input.stack || 'unsure';

@@ -1,6 +1,7 @@
 import { STACKS } from '../domain/stacks.js';
 import { slugify, scaffoldFiles, getScaffoldTree, filePurpose } from '../scaffold/scaffold.js';
-import { runLLMStage, MODE } from '../services/gemini.js';
+import { parseDeadline, milestoneSlots } from '../domain/deadline.js';
+import { runLLMStage, MODE } from '../services/llm.js';
 import { buildBuilderPrompt } from '../prompts/prompts.js';
 
 function normalizeShape(s) {
@@ -27,14 +28,17 @@ function deterministicOverview(ctx) {
     : input.type === 'service' ? 'a service'
     : input.type === 'tool' ? 'a small tool'
     : 'a web app';
-  return `Build ${type} around the "${shape}" flow as its spine: prove the main input → output path in a deterministic core first, then add thin adapters around it.`;
+  const direction = ctx?.results?.research?.directions?.[0];
+  const priming = direction ? ` Start from "${direction}":` : '';
+  return `Build ${type} around the "${shape}" flow as its spine:${priming} prove the main input → output path in a deterministic core first, then add thin adapters around it.`;
 }
 
 /** Fallback milestones that reference the architecture the builder stage saw. */
 function deterministicMilestones(ctx) {
   const { shape, core } = projectContext(ctx);
+  const corePhrase = String(core).replace(/^the /, '');
   return [
-    { week: 1, title: 'Foundation', tasks: ['Scaffold the repo from the starter files.', 'Wire build, test, and lint scripts.', `Add fixtures for the first ${core} sample.`], accept: 'the repo builds and the placeholder test passes.' },
+    { week: 1, title: 'Foundation', tasks: ['Scaffold the repo from the starter files.', 'Wire build, test, and lint scripts.', `Add fixtures for the first ${corePhrase} sample.`], accept: 'the repo builds and the placeholder test passes.' },
     { week: 2, title: 'Core slice', tasks: [`Implement the main ${shape} flow in ${core}.`, 'Connect the entry point to the core.'], accept: 'running the entry point on the sample input produces the expected output.' },
     { week: 3, title: 'Harden', tasks: [`Add error taxonomy and edge-case handling for the ${shape} flow.`, `Unit-test ${core} with fixed fixtures.`], accept: 'all tests are green and failures are clear and actionable.' },
     { week: 4, title: 'Ship', tasks: ['Write docs and a README quick start.', 'Tag a release.'], accept: 'a fresh clone builds and runs straight from the README.' },
@@ -87,7 +91,7 @@ function renderBuilderText({ overview, stackLabel, stackNoteLines, files, treeLi
     '',
     'Implementation milestones',
     ...milestones.flatMap((m, i) => [
-      `  M${i + 1} · W${m.week} ${m.title}`,
+      `  Milestone ${i + 1} — ${m.slot || `Week ${m.week}`}: ${m.title}`,
       ...m.tasks.map(t => `    - ${t}`),
       `    ✓ Done when: ${m.accept}`,
     ]),
@@ -103,8 +107,6 @@ export async function runBuilderAgent(ctx) {
   const stackKey = input.stack || 'unsure';
   const stack = STACKS[stackKey] || STACKS.unsure;
   const slug = slugify(input.name || input.idea || 'project');
-  const files = scaffoldFiles(input, slug);
-  const treeLines = getScaffoldTree(files, slug);
 
   const stackLabel = input.customStack || stack.label;
   const stackNoteLines = (stackKey === 'unsure' && !input.customStack)
@@ -112,8 +114,10 @@ export async function runBuilderAgent(ctx) {
     : [];
 
   const fallback = deterministicMilestones(ctx);
+  const days = parseDeadline(input.deadline).days;
+  ctx.deadlineDays = days; // consumed by the builder prompt for deadline-sized milestones
   const llm = await runLLMStage(
-    'builder:' + (input.idea || '') + '|' + stackLabel + '|' + (ctx?.results?.architecture?.shape || ''),
+    'builder:' + (input.idea || '') + '|' + stackLabel + '|' + (ctx?.results?.architecture?.shape || '') + '|' + (input.deadline || ''),
     buildBuilderPrompt(input, ctx),
   );
 
@@ -130,6 +134,16 @@ export async function runBuilderAgent(ctx) {
 
   if (!milestones) milestones = fallback;
   if (!overview) overview = deterministicOverview(ctx);
+
+  // Fit milestone labels to the deadline window (Day 1 / Day 2… for ≤ 14 days,
+  // Week N otherwise) so a 5-day deadline never shows "Week 4".
+  milestones = milestones.map((m, i) => ({
+    ...m,
+    slot: milestoneSlots(days, milestones.length)[i] || `Step ${i + 1}`,
+  }));
+
+  const files = scaffoldFiles(input, slug, { results: { ...ctx?.results, builder: { milestones, overview } } });
+  const treeLines = getScaffoldTree(files, slug);
 
   const text = renderBuilderText({ overview, stackLabel, stackNoteLines, files, treeLines, milestones });
   return { text, folder: slug, files, overview, milestones, mode };

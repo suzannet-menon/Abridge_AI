@@ -56,7 +56,7 @@ export default function ProjectForm({ onSubmit, initialData, onBack, running, on
 
   const loadExample = () => {
     setForm(EXAMPLE);
-    onToast('Example loaded — press Run pipeline (or Ctrl+Enter).');
+    onToast('Example idea loaded — ready to run.');
   };
 
   return (
@@ -125,7 +125,8 @@ export default function ProjectForm({ onSubmit, initialData, onBack, running, on
                   value={form.customStack} onChange={e => set('customStack', e.target.value)}
                 />
                 <p className="field-hint">
-                  Enter your full stack combination. This influences feasibility, architecture, and the implementation plan.
+                  List each technology, separated by <code>+</code>, <code>,</code>, or a space — e.g. <code>FastAPI + React + PostgreSQL</code>.
+                  The pipeline renders each component and picks a matching starter scaffold.
                 </p>
               </div>
             )}
@@ -183,14 +184,13 @@ export default function ProjectForm({ onSubmit, initialData, onBack, running, on
             {running ? 'Running…' : 'Run pipeline →'}
           </button>
           <button type="button" className="btn btn--ghost" id="example-btn" onClick={loadExample} disabled={running}>
-            Load example
+            Load example idea
           </button>
           {hint && <span className="form-hint" id="form-hint">{hint}</span>}
         </div>
         <p className="form-note">
           AbridgeAI runs a deterministic planning pipeline on the local backend — Logic is executed
           server-side, then results are returned to this dashboard.
-          <br />Press <kbd>Ctrl+Enter</kbd> to run.
         </p>
       </form>
     </section>

@@ -70,3 +70,29 @@ export function deadlineScore(parsed) {
   if (d <= 90) return 14;
   return 13;
 }
+
+/**
+ * Milestone time labels that fit the deadline window instead of always using
+ * weeks. For a deadline of 14 days or less milestones read as "Day 1 / Day 3 /
+ * Day 5 …" spread across the window; otherwise they stay weekly.
+ *
+ *   milestoneSlots(null, 4)        → Week 1 .. Week 4
+ *   milestoneSlots(30, 4)          → Week 1 .. Week 4   (> 14 days)
+ *   milestoneSlots(5, 4)           → Day 1, Day 3, Day 4, Day 5
+ *   milestoneSlots(1, 4)           → Day 1 × 4          (sprint fits one day)
+ *
+ * @param {number|null} days  parsed deadline days (null = unknown/vague)
+ * @param {number} n          number of milestones
+ * @returns {string[]} display labels, one per milestone
+ */
+export function milestoneSlots(days, n = 4) {
+  const count = Math.max(1, Math.floor(n));
+  if (days == null || days > 14) {
+    return Array.from({ length: count }, (_, i) => `Week ${i + 1}`);
+  }
+  const marks = [];
+  for (let i = 0; i < count; i++) {
+    marks.push(Math.max(1, Math.round(((i + 1) * days) / count)));
+  }
+  return marks.map(d => `Day ${d}`);
+}

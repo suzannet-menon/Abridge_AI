@@ -62,7 +62,7 @@ export function buildBriefModel(ctx, llm) {
   const mvpGuidance = clampList(llm?.mvpGuidance, MVP_GUIDANCE, 4);
   const story = llm?.story ? String(llm.story).trim() : null;
   const footer = llmUsed
-    ? ['This plan used Gemini to tailor the narrative sections to your idea.', 'It is a starting point — adapt it to your specific situation.']
+    ? ['This plan used an LLM to tailor the narrative sections to your idea.', 'It is a starting point — adapt it to your specific situation.']
     : FOOTER;
 
   const context = [

@@ -49,12 +49,14 @@ Complete Project Brief (exportable .md)
 - **Stage metadata endpoint** — stage names, order, and hints come from `GET /api/meta`, so the UI timeline never drifts from the backend
 - **Feasibility scoring** — a /100 score across five weighted axes (idea clarity, stack fit, scope, time realism, builder fit) with a GO / Proceed with caution / Rethink verdict
 - **Builder profile** — personalizes recommendations based on public GitHub language signals
-- **Custom stack support** — enter any combination (e.g. `FastAPI + React + PostgreSQL`)
+- **Custom stack support** — enter any combination (e.g. `FastAPI + React + PostgreSQL`, or `cpp + python`); it's parsed into per-component layers, a matching starter base is chosen, and the scaffold README lists the exact toolchain (e.g. a C++/CMake note) each planned component needs
+- **Deadline-aware milestone plans** — plans are sized to your window: deadlines of ≤ 14 days produce Day-based milestones (Day 1 / Day 3 / Day 5…) and an effort estimate framed around that deadline, instead of always assuming weeks
+- **Provider-resilient LLM stages** — each LLM stage shows a badge for where its content came from: `Gemini · live`, `Groq · live`, `LLM · cached`, or `fallback`
 - **Architecture blueprint** — module breakdown and data-flow pattern
 - **Tech stack recommendation** — matched to your comfort level and project type
-- **Starter scaffold** — downloadable as a `.zip` with `PLAN.md` included
+- **Starter scaffold** — downloadable as a `.zip` with a project-specific `README.md` (idea, why, architecture diagram, stack rationale, dependencies, quick start) and a `PLAN.md` (feasibility summary and implementation milestones)
 - **Markdown export** — full project brief downloadable as `.md`
-- **Optional Gemini upgrades** — research, architecture, builder, and brief stages call Gemini for idea-specific content when `GEMINI_API_KEY` is set, and fall back to the deterministic agents otherwise
+- **Optional LLM upgrades** — research, architecture, builder, and brief stages call Gemini for idea-specific content when `GEMINI_API_KEY` is set; if Gemini is missing or out of quota, Groq is tried via `GROQ_API_KEY`. If neither is available they fall back to the deterministic agents.
 - **Project history** — saved to localStorage, restorable, deletable
 - **Draft autosave** — form persists across reloads
 - **Light & dark themes** — respects system preference, stored across sessions
@@ -69,8 +71,8 @@ Two layers — **backend** holds all planning logic, **frontend** is a thin Reac
 ```
 AbridgeAI/
 ├── backend/                      # ALL planning logic lives here
-│   ├── server.js                 # Express server: API + serves built frontend
-│   ├── .env                      # optional: GEMINI_API_KEY (see .env.example at root)
+│   ├── server.js                 # entry: createApp().listen(3001)
+│   ├── app.js                    # Express app factory (API + static) — shared with local server & Vercel
 │   ├── src/
 │   │   ├── pipeline/
 │   │   │   ├── stages.js         # Single source of truth for the 7 stages
@@ -78,7 +80,7 @@ AbridgeAI/
 │   │   │   └── runPipeline.js    # Generic loop over the stage registry
 │   │   ├── agents/               # 7 stage functions (run(ctx) → structured outputs)
 │   │   │   ├── githubAgent.js
-│   │   │   ├── researchAgent.js  # Gemini-first, deterministic fallback
+│   │   │   ├── researchAgent.js  # Gemini-first → Groq → deterministic fallback
 │   │   │   ├── feasibilityAgent.js
 │   │   │   ├── architectureAgent.js
 │   │   │   ├── techStackAgent.js
@@ -87,15 +89,18 @@ AbridgeAI/
 │   │   ├── brief/
 │   │   │   ├── model.js          # Canonical brief model (single source)
 │   │   │   └── render.js         # renderText() + renderMarkdown()
-│   │   ├── domain/               # STACKS, PROJECT_TYPES, TEAM_SIZES, deadlines
+│   │   ├── domain/               # STACKS, PROJECT_TYPES, TEAM_SIZES, deadlines, custom-stack parsing
 │   │   │   ├── stacks.js
 │   │   │   ├── types.js
-│   │   │   └── deadline.js
-│   │   ├── prompts/research.prompt.js  # Constrained Gemini research prompt
+│   │   │   ├── deadline.js
+│   │   │   └── techs.js          # customStackTokenizer + component → language map
+│   │   ├── prompts/prompts.js    # LLM instruction prompts (stack-as-constraint, deadline-sizing)
 │   │   ├── scaffold/             # Starter generators + file tree
 │   │   ├── services/
 │   │   │   ├── github.js         # GitHub API fetch + sample fallback
-│   │   │   └── gemini.js         # Gemini client, cached per idea-hash
+│   │   │   ├── llm.js            # LLM orchestrator: Gemini → Groq → deterministic
+│   │   │   ├── gemini.js         # Gemini client (OpenAI-compatible), cached per idea-hash
+│   │   │   └── groq.js           # Groq client (OpenAI-compatible), cached per idea-hash
 │   │   ├── utils/hash.js         # Deterministic hash + seeded pick
 │   │   └── export/markdown.js    # Markdown brief builder (legacy-safe)
 │   └── package.json              # express (only new dependency)
@@ -111,8 +116,10 @@ AbridgeAI/
 │   ├── main.jsx
 │   └── index.css
 │
+├── api/index.js                  # Vercel serverless entrypoint → createApp()
 ├── public/data/                  # sample-github-analysis.json (read by backend)
 ├── vite.config.js                # dev proxy: /api → localhost:3001
+├── .env                          # optional: GEMINI_API_KEY / GROQ_API_KEY (see .env.example)
 └── package.json
 ```
 
@@ -153,15 +160,60 @@ npm run start
 
 ---
 
-## Optional: Gemini-powered research
+## Deploying to Vercel
+
+The repo is structured to deploy on Vercel out of the box:
+
+- **Frontend** — Vercel runs `npm run build` (Vite) and serves `dist/`.
+- **Backend** — `api/index.js` exports the same Express app (`backend/app.js`)
+  as a serverless function. Every `/api/*` request is rewritten to it, and all
+  other routes fall back to the SPA's `index.html` (`vercel.json`).
+- **No long-lived process needed** — the pipeline runs inside the function
+  (max duration is set to 60s in `vercel.json` for the 4 LLM calls).
+
+### Setting environment variables
+
+Set these in **Vercel → Project → Settings → Environment Variables** (never
+commit `.env` — it's gitignored):
+
+| Variable           | Required? | Example                          |
+|--------------------|-----------|----------------------------------|
+| `GEMINI_API_KEY`   | optional  | `AIza…` (from aistudio.google.com) |
+| `GEMINI_MODEL`     | optional  | `gemini-3.6-flash`               |
+| `GROQ_API_KEY`     | optional  | `gsk_…` (from console.groq.com)  |
+| `GROQ_MODEL`       | optional  | `openai/gpt-oss-120b`            |
+
+Without a key the app runs fully deterministically (every badge shows
+`fallback`), so the deployment always works.
+
+### Deploy steps
+
+```bash
+npx vercel          # link + preview deploy
+npx vercel --prod   # production deploy
+```
+
+Or import the repo at https://vercel.com/new — framework preset "Vite" is
+detected automatically and no extra build settings are required.
+
+> `PORT` is handled by Vercel (or defaults to 3001 locally).
+
+---
+
+## Optional: LLM-powered research
 
 The **Research**, **Architecture**, **Builder**, and **Brief** stages call
-Google's Gemini API for idea-specific content when a key is configured — every
-other stage stays deterministic:
+Google's Gemini API for idea-specific content when a key is configured. If
+Gemini is missing, unparsable, or out of quota (the free tier allows ~20
+requests/day on `gemini-3.6-flash`), the fallback provider **Groq** (an
+OpenAI-compatible endpoint on fast inference hardware) is tried next; if that
+also fails, the stage falls back to the deterministic agents. Every other stage
+stays deterministic:
 
-1. Get a free key from https://aistudio.google.com
-2. `copy .env.example .env` and set `GEMINI_API_KEY=...`
-3. Restart the backend (`npm run server`)
+1. Get a Gemini key at https://aistudio.google.com (primary).
+2. Get a Groq key at https://console.groq.com (fallback — helps when Gemini hits its daily quota).
+3. `copy .env.example .env` and set `GEMINI_API_KEY=...` (and `GROQ_API_KEY=...`).
+4. Restart the backend (`npm run server`)
 
 - Prompts live in `backend/src/prompts/prompts.js` — each defines the strict
   JSON shape the stage expects, so output is concrete and idea-specific.
@@ -204,9 +256,9 @@ Clearing browser data for the site resets everything.
 
 ## Limitations
 
-- **Deterministic default / optional LLM** — without a key, every stage computes deterministically from your inputs via hashed seeding (same inputs → same outputs). Setting `GEMINI_API_KEY` upgrades the research, architecture, builder, and brief stages to Gemini; feasibility, stack, and the scaffold stay deterministic.
+- **Deterministic default / optional LLM** — without a key, every stage computes deterministically from your inputs via hashed seeding (same inputs → same outputs). Setting `GEMINI_API_KEY` upgrades the research, architecture, builder, and brief stages to Gemini; setting `GROQ_API_KEY` (or leaving Gemini out of quota) routes them through Groq instead; feasibility, stack, and the scaffold stay deterministic.
 - **GitHub analysis is high-level** — language tallies from public repos give a rough signal, not a precise skill assessment. Treat the builder profile as directional, not definitive.
-- **Scaffold is a starting point** — the generated starter scaffold is not production-ready software. It provides a foundation with the right file structure and entry points, but requires real implementation work.
+- **Scaffold is a starting point** — the generated starter scaffold is not production-ready software. It provides a foundation with the right file structure and entry points, but requires real implementation work. The scaffold's own README includes the per-project install/run commands for its stack.
 - **Feasibility score is a planning estimate** — the /100 score is a structured heuristic, not a scientifically precise measurement. Use it to guide scoping conversations.
 
 ---

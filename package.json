@@ -13,6 +13,7 @@
     "start": "npm run build && node --env-file-if-exists=.env backend/server.js"
   },
   "dependencies": {
+    "express": "^4.22.3",
     "fflate": "^0.8.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

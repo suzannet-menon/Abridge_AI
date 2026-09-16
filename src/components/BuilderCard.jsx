@@ -10,7 +10,8 @@ export default function BuilderCard({ builder, onToast }) {
   };
 
   const modeBadge = builder.mode === 'llm' ? 'Gemini · live'
-    : builder.mode === 'cached-llm' ? 'Gemini · cached'
+    : builder.mode === 'groq' ? 'Groq · live'
+    : builder.mode === 'cached-llm' ? 'LLM · cached'
     : builder.mode === 'deterministic' ? 'fallback' : undefined;
 
   return (

@@ -1,5 +1,5 @@
 import { hash, pick } from '../utils/hash.js';
-import { runLLMStage, MODE } from '../services/gemini.js';
+import { runLLMStage, MODE } from '../services/llm.js';
 import { buildResearchPrompt } from '../prompts/prompts.js';
 
 const OPPORTUNITIES = [
@@ -10,6 +10,11 @@ const OPPORTUNITIES = [
   'The pattern of "input → structured output" generalizes well across domains.',
   'Developer-facing tools that integrate with existing workflows see faster adoption.',
   'Products that make complex workflows observable and predictable have strong retention.',
+  'A tool with a copy-paste-onboarding path (one command, zero config) spreads fast.',
+  'Pipeline-shaped tools convert once and stay: users keep feeding them inputs.',
+  'Audience-specific defaults make a generic tool feel purpose-built from day one.',
+  'Offline-first and privacy-conscious positioning is a differentiator for CLI tools.',
+  'The fastest wedge is automating the most tedious step of the user journey.',
 ];
 
 const RISKS = [
@@ -19,6 +24,10 @@ const RISKS = [
   'Integration friction with existing workflows is the most common adoption blocker.',
   'Underspecified inputs produce unreliable outputs; define inputs explicitly.',
   'Perfectionism before shipping is a common project killer — prefer iterative delivery.',
+  'A vague input contract creates a debugging nightmare the moment the first real user arrives.',
+  'Skipping the boring packaging step (install, help text, error messages) kills adoption.',
+  'Optimizing for features instead of a reproducible output quality hurts trust over time.',
+  'Underestimating real-world input messiness is the surest way to blow the deadline.',
 ];
 
 const DIRECTIONS = [
@@ -28,18 +37,21 @@ const DIRECTIONS = [
   'Make the pipeline observable: users should see each stage work.',
   'Design for offline-first; it removes a whole class of failure modes.',
   'Define a tight MVP with 3 features maximum, then add based on real usage.',
+  'Start with the ugliest possible working path; polish only after it is real.',
+  'Automate the demo: one command that turns a sample input into the final output.',
 ];
 
 const FALLBACK_LINE = 'Re-validate this against a sharp, concrete use case before committing.';
 
 /** Structured result shape every researcher returns: { opportunities, risks, directions, builderSignal, text }. */
-function normalize(idea, gh, part) {
-  const opportunities = clamp(part?.opportunities, 3, () => deterministicPicks(idea, gh, 'opp'));
-  const risks = clamp(part?.risks, 3, () => deterministicPicks(idea, gh, 'risk'));
-  const directions = clamp(part?.directions, 2, () => deterministicPicks(idea, gh, 'dir'));
+function normalize(idea, seedKey, gh, part) {
+  const opportunities = clamp(part?.opportunities, 3, () => deterministicPicks(seedKey, 'opp'));
+  const risks = clamp(part?.risks, 3, () => deterministicPicks(seedKey, 'risk'));
+  const directions = clamp(part?.directions, 2, () => deterministicPicks(seedKey, 'dir'));
+  const buildersignalFallback = `${gh?.languages?.[0]?.language || 'n/a'}-first builder, ${gh?.profile?.followers ?? 0} GitHub followers.`;
   const builderSignal = part?.builderSignal && String(part.builderSignal).trim()
     ? String(part.builderSignal).trim()
-    : `${gh?.languages?.[0]?.language || 'n/a'}-first builder, ${gh?.profile?.followers ?? 0} GitHub followers.`;
+    : (gh?.profile?.login ? buildersignalFallback : `Builder with no public GitHub history yet — validate this idea against live users before committing to the ${String(part?.opportunities?.[0] || 'first').slice(0, 40)} opening.`);
 
   const text = renderText({ project: idea, builderSignal, opportunities, risks, directions });
   return { opportunities, risks, directions, builderSignal, text };
@@ -52,15 +64,15 @@ function clamp(arr, n, fallback) {
   return items;
 }
 
-function deterministicPicks(idea, gh, which) {
-  const seed = hash((idea || '') + '|' + (gh?.profile?.login || '') + '|' + which);
+function deterministicPicks(seedKey, which) {
+  const seed = hash(seedKey + '::' + which);
   const pool = which === 'opp' ? OPPORTUNITIES : which === 'risk' ? RISKS : DIRECTIONS;
   const n = which === 'dir' ? 2 : 3;
   return pick(seed, pool, n);
 }
 
-function deterministic(idea, gh) {
-  const oppSeed = hash((idea || '') + '|' + (gh?.profile?.login || ''));
+function deterministic(seedKey) {
+  const oppSeed = hash(seedKey);
   return {
     opportunities: pick(oppSeed, OPPORTUNITIES, 3),
     risks: pick(oppSeed ^ 0x9e3779b9, RISKS, 3),
@@ -86,7 +98,7 @@ function renderText(r) {
 }
 
 /**
- * Research stage. Uses the Gemini API when a key is configured (cached per
+ * Research stage. Uses Gemini → Grok when a key is configured (cached per
  * input hash); otherwise falls back to seeded pool picks. Always returns
  * structured { opportunities, risks, directions, builderSignal, text, mode }.
  */
@@ -94,12 +106,13 @@ export async function runResearchAgent(input, gh) {
   const idea = input.idea || '';
   const ghResolved = gh || { profile: { followers: 0 }, languages: [] };
 
-  const seedKey = (idea || '') + '|' + (input.stack || '') + '|' + (input.type || '') +
-    '|' + (input.deadline || '') + '|' + (ghResolved?.profile?.login || '');
+  const seedKey = (idea || '') + '|' + (input.stack || '') + '|' + (input.customStack || '') +
+    '|' + (input.type || '') + '|' + (input.deadline || '') + '|' + (input.audience || '') +
+    '|' + (input.team || '') + '|' + (input.comfort || '') + '|' + (ghResolved?.profile?.login || '');
   const llm = await runLLMStage('research:' + seedKey, buildResearchPrompt(input, ghResolved));
 
   if (llm.ok) {
-    const data = normalize(idea, ghResolved, {
+    const data = normalize(idea, seedKey, ghResolved, {
       opportunities: llm.data.opportunities,
       risks: llm.data.risks,
       directions: llm.data.directions,
@@ -108,5 +121,5 @@ export async function runResearchAgent(input, gh) {
     return { ...data, mode: llm.mode };
   }
 
-  return { ...normalize(idea, ghResolved, deterministic(idea, ghResolved)), mode: MODE.DETERMINISTIC };
+  return { ...normalize(idea, seedKey, ghResolved, deterministic(seedKey)), mode: MODE.DETERMINISTIC };
 }

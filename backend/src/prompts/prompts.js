@@ -1,5 +1,5 @@
 /**
- * Prompt builders for the Gemini-capable stages (research, architecture,
+ * Prompt builders for the LLM-capable stages (research, architecture,
  * builder, brief). These are the contract between the app and the model:
  * the strict JSON shapes here are exactly what the stage agents consume, and
  * every prompt tells the model to be concrete and idea-specific so output is
@@ -15,6 +15,7 @@ export function buildResearchPrompt(input, gh) {
   const languages = gh?.languages?.length
     ? gh.languages.slice(0, 5).map(l => `${l.language} (${l.count} repos)`).join(', ')
     : 'no public repo data (sample fallback)';
+  const stack = input.customStack || (input.stack && input.stack !== 'unsure' ? input.stack : 'undecided');
 
   return `You are a research analyst inside a project-planning studio. A developer submitted a project idea. Produce a short, concrete, independent research brief for THIS idea.
 
@@ -23,6 +24,7 @@ Project type: ${input.type || 'not specified'}
 Target audience: ${input.audience || 'not specified'}
 Deadline: ${input.deadline || 'not specified'}
 Builder comfort level: ${input.comfort || 'not specified'}
+Chosen stack: ${stack}
 Builder's top GitHub languages: ${languages}
 
 ${jsonShape('research brief', {
@@ -37,7 +39,8 @@ Rules:
 - Every item MUST reference this specific idea, its type, audience, or deadline. One sentence, max 24 words, no leading numbering.
 - Forbidden filler phrases: "build a vertical slice", "scope carefully", "iterate quickly", "define an MVP" — say something specific instead.
 - Be realistic. Never invent market data, competitors, or facts about the user.
-- builderSignal: one sentence tying the builder's language history (or its absence) to the idea.`;
+- builderSignal: one sentence tying the builder's language history (or its absence) to the idea.
+- STACK IS A HARD CONSTRAINT: every recommendation and direction MUST assume the chosen stack (${stack}) and its languages. Never suggest switching language families (e.g. no Node.js/JavaScript advice for a Python/C++ idea) — instead name libraries, packaging, or tooling for ${stack}. If the stack is undecided, only then may you weigh the builder's GitHub languages.`;
 }
 
 /** Architecture stage prompt: module + data-flow blueprint for THIS idea. */
@@ -74,13 +77,18 @@ export function buildBuilderPrompt(input, ctx) {
   const feas = ctx?.results?.feasibility || {};
   const research = ctx?.results?.research || {};
   const modules = (arch.modules || []).join(', ') || 'not decided yet';
-  return `You are an implementation coach inside a project-planning studio. Write a 4-week build plan for THIS idea, mapped onto the architecture that was already designed.
+  const stackLabel = stack.label || input.customStack || 'not decided yet';
+  const deadlineDays = ctx?.deadlineDays;
+  const unitHint = deadlineDays != null && deadlineDays <= 14
+    ? `The deadline is only ${deadlineDays} day(s) — size the milestones as DAY ranges that fit the window (e.g. "Day 1", "Day 1-2"), never weeks.`
+    : `The deadline is ${input.deadline || 'not specified'} — size the milestones to fit it.`;
+  return `You are an implementation coach inside a project-planning studio. Write a build plan for THIS idea, mapped onto the architecture that was already designed and sized to the deadline.
 
 Project idea: "${input.idea}"
 Project type: ${input.type || 'not specified'}
 Deadline: ${input.deadline || 'not specified'}
 Builder comfort level: ${input.comfort || 'not specified'}
-Chosen stack: ${stack.label || input.customStack || 'not decided yet'}
+Chosen stack: ${stackLabel}
 Feasibility: ${feas ? `${feas.score}/100 — ${feas.verdict}` : '—'}
 Architecture shape: ${arch.shape || 'not decided yet'}
 Architecture modules: ${modules || 'not decided yet'}
@@ -97,10 +105,12 @@ ${jsonShape('build plan', {
   })}
 
 Rules:
-- Exactly 4 milestones with weeks 1, 2, 3, 4 in order (integers only).
+- Exactly 4 milestones numbered 1-4 in order (integers only).
+- ${unitHint}
 - Title is a short project-specific name (e.g. "Rule Engine", "Intake & Matching") — never the generic "Foundation / Core slice / Harden / Ship".
 - Tasks and done-when conditions MUST reference THIS idea's inputs, outputs, and the architecture module names above. Every milestone must name at least one of: ${modules || 'a module from the architecture'}.
 - 2-4 tasks per milestone, each one actionable sentence referencing a deliverable (max 14 words).
+- STACK IS A HARD CONSTRAINT: every task and tool MUST respect the chosen stack (${stackLabel}) and its languages. Never propose a different language family (no Node.js/commander.js steps for a Python/C++ idea).
 - overview mentions the idea's core value, the first slice to ship, and stays realistic for the deadline.`;
 }
 
@@ -108,6 +118,7 @@ Rules:
 export function buildBriefPrompt(ctx) {
   const input = ctx?.input || {};
   const r = ctx?.results || {};
+  const stackLabel = r.stack?.label || input.customStack || '—';
   return `You are a project-brief writer. Given a finished analysis, write the narrative sections of an implementation plan for THIS project.
 
 Project idea: "${input.idea}"
@@ -115,11 +126,11 @@ Owner: ${input.name || 'the builder'}
 Audience: ${input.audience || 'not specified'}
 Deadline: ${input.deadline || 'not specified'}
 Feasibility: ${r.feasibility ? `${r.feasibility.score}/100 — ${r.feasibility.verdict}` : '—'}
-Stack: ${r.stack?.label || input.customStack || '—'}
+Stack: ${stackLabel}
 Architecture: ${r.architecture?.shape || '—'}
 Research signal: ${r.research?.directions?.[0] || '—'}
 Research opportunities: ${(r.research?.opportunities || []).join(' | ') || '—'}
-Planned milestones: ${(r.builder?.milestones || []).map(m => `W${m.week} ${m.title}`).join(', ') || '—'}
+Planned milestones: ${(r.builder?.milestones || []).map(m => `${m.slot || `Week ${m.week}`} ${m.title}`).join(', ') || '—'}
 
 ${jsonShape('brief sections', {
     story: 'one paragraph (4-6 sentences) tying the idea, feasibility verdict, and research signal together',
@@ -131,6 +142,8 @@ Rules:
 - story is 4-6 sentences, idea-specific, matching the verdict tone (GO / caution / rethink).
 - Exactly 4 next steps, each one concrete sentence (max 16 words) ordered from first action onward.
 - Exactly 2 mvp-scope rules that reference THIS idea's core deliverable.
+- STACK IS A HARD CONSTRAINT: every next step MUST use the chosen stack (${stackLabel}) and its languages — no Node.js / JavaScript tooling for a Python-or-C++ stack, and no switching the language family mid-plan.
+- Fit the timeline: the deadline is ${input.deadline || 'not specified'}; steps should fit that window, not assume unlimited time.
 - Never mention "this plan was generated deterministically".`;
 }
 

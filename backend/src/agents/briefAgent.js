@@ -1,6 +1,6 @@
 import { buildBriefModel } from '../brief/model.js';
 import { renderText } from '../brief/render.js';
-import { runLLMStage, MODE } from '../services/gemini.js';
+import { runLLMStage, MODE } from '../services/llm.js';
 import { buildBriefPrompt } from '../prompts/prompts.js';
 
 /**
@@ -8,8 +8,8 @@ import { buildBriefPrompt } from '../prompts/prompts.js';
  * (structured results only — no text slicing) and returns the model plus the
  * rendered text used on screen and in exports.
  *
- * When Gemini is available it tailors the story / next-steps / MVP sections;
- * otherwise the bundled defaults are used so the brief always renders.
+ * When an LLM provider is available it tailors the story / next-steps / MVP
+ * sections; otherwise the bundled defaults are used so the brief always renders.
  */
 export async function runBriefAgent(ctx) {
   const input = ctx?.input || {};
