@@ -6,6 +6,23 @@ AbridgeAI is a standalone AI-powered project planning and feasibility studio tha
 
 ---
 
+## Screenshots
+
+| Overview — light theme | Planning run — dark theme |
+|:---:|:---:|
+| ![Overview dashboard](screenshots/overview-dashboard-light.png) | ![Planning run](screenshots/project-overview-dark.png) |
+| Dashboard with metrics, project history, and the live pipeline timeline. | A completed planning run with the 7-stage pipeline and feasibility score. |
+
+| Builder profile — dark theme | Research stage — dark theme |
+|:---:|:---:|
+| ![GitHub profile analysis](screenshots/Githubofperson-analysis-dark.png) | ![Research stage](screenshots/Research-dark.png) |
+| Builder profile built from public GitHub language signals. | Opportunity, risk, and direction scan for the idea as written. |
+
+| Starter scaffold — light theme |
+|:---:|
+| ![Starter scaffold](screenshots/scaffold-implementation-light.png) |
+| Generated starter project with file tree, README and PLAN.md — downloadable as a .zip. |
+
 ## What is AbridgeAI?
 
 Developers often start with an idea without knowing:
@@ -56,7 +73,7 @@ Complete Project Brief (exportable .md)
 - **Tech stack recommendation** — matched to your comfort level and project type
 - **Starter scaffold** — downloadable as a `.zip` with a project-specific `README.md` (idea, why, architecture diagram, stack rationale, dependencies, quick start) and a `PLAN.md` (feasibility summary and implementation milestones)
 - **Markdown export** — full project brief downloadable as `.md`
-- **Optional LLM upgrades** — research, architecture, builder, and brief stages call Gemini for idea-specific content when `GEMINI_API_KEY` is set; if Gemini is missing or out of quota, Groq is tried via `GROQ_API_KEY`. If neither is available they fall back to the deterministic agents.
+- **LLM-Enhanced Research** — research, architecture, builder, and brief stages are boosted with idea-specific content from Gemini (`GEMINI_API_KEY`), backed up by Groq (`GROQ_API_KEY`) with automatic fallback, cached results, and live provider badges; the app always works even with no keys set.
 - **Project history** — saved to localStorage, restorable, deletable
 - **Draft autosave** — form persists across reloads
 - **Light & dark themes** — respects system preference, stored across sessions
@@ -67,6 +84,14 @@ Complete Project Brief (exportable .md)
 ## Architecture
 
 Two layers — **backend** holds all planning logic, **frontend** is a thin React client that calls the API.
+
+```mermaid
+flowchart TD
+    UI["React dashboard"] -->|"fetch /api/*"| API["Express app<br/>api/index.js (Vercel) · backend/app.js (local)"]
+    API --> PIPE["7-stage pipeline<br/>stage registry + generic runner"]
+    PIPE --> LLM["LLM layer<br/>Gemini → Groq → deterministic fallback"]
+    PIPE --> OUT["Structured results<br/>cards · scaffold .zip · markdown brief"]
+```
 
 ```
 AbridgeAI/
@@ -200,15 +225,17 @@ detected automatically and no extra build settings are required.
 
 ---
 
-## Optional: LLM-powered research
+## LLM-Enhanced Research
 
-The **Research**, **Architecture**, **Builder**, and **Brief** stages call
-Google's Gemini API for idea-specific content when a key is configured. If
+The **Research**, **Architecture**, **Builder**, and **Brief** stages are boosted
+with idea-specific content from Google's Gemini when a key is configured. If
 Gemini is missing, unparsable, or out of quota (the free tier allows ~20
 requests/day on `gemini-3.6-flash`), the fallback provider **Groq** (an
-OpenAI-compatible endpoint on fast inference hardware) is tried next; if that
-also fails, the stage falls back to the deterministic agents. Every other stage
-stays deterministic:
+OpenAI-compatible endpoint on fast inference hardware) steps in; if that also
+fails, the stage falls back to the deterministic agents. Every other stage
+stays deterministic.
+
+**To enable it:**
 
 1. Get a Gemini key at https://aistudio.google.com (primary).
 2. Get a Groq key at https://console.groq.com (fallback — helps when Gemini hits its daily quota).
@@ -256,10 +283,9 @@ Clearing browser data for the site resets everything.
 
 ## Limitations
 
-- **Deterministic default / optional LLM** — without a key, every stage computes deterministically from your inputs via hashed seeding (same inputs → same outputs). Setting `GEMINI_API_KEY` upgrades the research, architecture, builder, and brief stages to Gemini; setting `GROQ_API_KEY` (or leaving Gemini out of quota) routes them through Groq instead; feasibility, stack, and the scaffold stay deterministic.
-- **GitHub analysis is high-level** — language tallies from public repos give a rough signal, not a precise skill assessment. Treat the builder profile as directional, not definitive.
-- **Scaffold is a starting point** — the generated starter scaffold is not production-ready software. It provides a foundation with the right file structure and entry points, but requires real implementation work. The scaffold's own README includes the per-project install/run commands for its stack.
-- **Feasibility score is a planning estimate** — the /100 score is a structured heuristic, not a scientifically precise measurement. Use it to guide scoping conversations.
+- **Feature depth, not production-grade** — the generated scaffold is a starting point that needs real implementation, and the feasibility score is a planning heuristic, not a scientific measurement.
+- **GitHub signal is directional** — the builder profile uses public-repo language tallies as a rough guide, not a skill assessment.
+- **LLM content depends on the provider** — add `GEMINI_API_KEY` / `GROQ_API_KEY` for idea-specific text; without keys the app still runs fully deterministic.
 
 ---
 
