@@ -646,6 +646,15 @@ kbd {
 .l-cta-btn:hover { background: var(--lime-bright); box-shadow: 0 10px 24px -14px rgba(42, 58, 0, 0.5); }
 .l-cta-btn:active { transform: translateY(1px); }
 
+[data-theme="dark"] .l-nav-cta,
+[data-theme="dark"] .l-cta-btn,
+[data-theme="dark"] .btn-new,
+[data-theme="dark"] .btn--primary,
+[data-theme="dark"] .copy-btn,
+[data-theme="dark"] .card-copy.is-copied,
+[data-theme="dark"] .card-download,
+[data-theme="dark"] .skip-link { color: #000; }
+
 /* Footer */
 .l-footer { border-top: var(--hairline); }
 .l-footer-inner { max-width: 1240px; margin: 0 auto; padding: 26px 32px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink-faint); }
